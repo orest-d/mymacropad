@@ -17,7 +17,7 @@ class AppContainer:
     def goto(self, app):
         self.refresh=True
         if type(app) == int:
-            self.active_index=(app+len(self.apps))%len(apps)
+            self.active_index=(app+len(self.apps))%len(self.apps)
         else:
             for i,a in enumerate(self.apps):
                 if a == app or a.name == app:
@@ -48,6 +48,12 @@ class AppContainer:
             self.delta_encoder = new_encoder-last_encoder
             last_encoder = new_encoder
             aa = self.active_app()
+            if not aa.capture_encoder and self.delta_encoder:
+                if self.delta_encoder>0:
+                    self.next_app()
+                else:
+                    self.previous_app()
+                continue
             if self.refresh:
                 self.text = self.macropad.display_text(title=aa.name)
                 aa.init(self)
@@ -60,16 +66,16 @@ class AppContainer:
 
 
 class App:
+    capture_encoder=False
     def __init__(self, name):
         self.name = name
     def init(self, container):
         pass
-    def tick(self, container):
+    def do_tick(self, container):
         pass
-
 class Key:
     def __init__(self, n, action=None, *frames):
-        self.frames=frames
+        self.frames=list(frames)
         self.n = n
         self.action=action
 
@@ -78,12 +84,28 @@ class Key:
             self.frames.append((r,g,b))
         return self
 
+    def do(self, app, container, x):
+        if x is None:
+            return
+        if type(x) == str:
+            container.macropad.keyboard_layout.write(x)
+        elif type(x) == int:
+            container.macropad.keyboard.send(x),
+        elif type(x) == tuple:
+            container.macropad.keyboard.send(*x),
+        elif type(x) == list:
+            for xx in x:
+                self.do(app, container, xx)
+        else:
+            x(app, container)
+
     def do_action(self, app, container):
-        if self.action is not None:
-            if type(self.action) == str:
-                container.macropad.keyboard_layout.write(self.action)
-            else:
-                self.action(self, app, container)
+        self.do(app, container, self.action)
+#        if self.action is not None:
+#            if type(self.action) == str:
+#                container.macropad.keyboard_layout.write(self.action)
+#            else:
+#                self.action(self, app, container)
 
     def tick_color(self, ticks):
         if len(self.frames):
@@ -92,26 +114,41 @@ class Key:
         else:
             return (0,0,0)
 
+class Pause:
+    def __init__(self, t):
+        self.t=t
+    def __call__(self, *arg):
+        time.sleep(self.t)
+
 class Screen(App):
     def __init__(self, name, keys):
         self.name = name
         self.keys = keys
     def init(self, container):
         pixels = container.macropad.pixels
+        for i in range(12):
+            pixels[i]=(0,0,0)
         for key in self.keys:
             pixels[key.n]=key.tick_color(0)
 
-    def tick(self, container):
-        t = container.ticks.pixels
+    def do_tick(self, container):
+        t = container.ticks
+        pixels = container.macropad.pixels
+        key_event = container.key_event
         for key in self.keys:
             pixels[key.n]=key.tick_color(t)
+        if key_event and key_event.pressed:
+            for key in self.keys:
+                if key_event.key_number == key.n:
+                    key.do_action(self, container)
 
 class Colors(App):
+    capture_encoder=True
     ESC_KEY = 0
     RED_KEY = 3
     GREEN_KEY = 4
     BLUE_KEY = 5
-    DEMO = 6,7,8
+    DEMO = 6,7,8,9,10,11
 
     RED_MODE = "Red"
     GREEN_MODE = "Green"
@@ -155,6 +192,8 @@ class Colors(App):
             if key_event.pressed and key_event.key_number in (self.RED_KEY, self.GREEN_KEY, self.BLUE_KEY):
                 self.mode = {self.RED_KEY:self.RED_MODE, self.BLUE_KEY:self.BLUE_MODE, self.GREEN_KEY:self.GREEN_MODE}.get(key_event.key_number)
                 self.index = {self.RED_KEY:0, self.GREEN_KEY:1, self.BLUE_KEY:2}.get(key_event.key_number)
+            if key_event.pressed and key_event.key_number == self.ESC_KEY:
+                container.goto(0)
         if self.mode == self.RED_MODE:
             macropad.pixels[self.RED_KEY]=(255,0,0)
             macropad.pixels[self.GREEN_KEY]=(0,5,0)
