@@ -296,7 +296,6 @@ class App:
         pass
     def do_tick(self, container):
         pass
-
 class Key:
     def __init__(self, n, action=None, *animation):
         self.color_animation=Animation(*animation)
@@ -374,6 +373,45 @@ class Pop:
         container.pop()
 
 POP = Pop()
+
+class CC:
+    def __init__(self, cc):
+        self.cc=cc
+    def __call__(self, app, container):
+        container.macropad.consumer_control.send(self.cc)
+
+BRIGHTNESS_DECREMENT = CC(ConsumerControlCode.BRIGHTNESS_DECREMENT)
+BRIGHTNESS_INCREMENT = CC(ConsumerControlCode.BRIGHTNESS_INCREMENT)
+EJECT = CC(ConsumerControlCode.EJECT)
+FAST_FORWARD = CC(ConsumerControlCode.FAST_FORWARD)
+MUTE = CC(ConsumerControlCode.MUTE)
+PLAY_PAUSE = CC(ConsumerControlCode.PLAY_PAUSE)
+RECORD = CC(ConsumerControlCode.RECORD)
+REWIND = CC(ConsumerControlCode.REWIND)
+SCAN_NEXT_TRACK = CC(ConsumerControlCode.SCAN_NEXT_TRACK)
+SCAN_PREVIOUS_TRACK = CC(ConsumerControlCode.SCAN_PREVIOUS_TRACK)
+STOP = CC(ConsumerControlCode.STOP)
+VOLUME_DECREMENT = CC(ConsumerControlCode.VOLUME_DECREMENT)
+VOLUME_INCREMENT = CC(ConsumerControlCode.VOLUME_INCREMENT)
+
+class Move:
+    def __init__(self, x, y):
+        self.x=x
+        self.y=y
+    def __call__(self, app, container):
+        container.macropad.mouse.move(self.x, self.y)
+
+class Pause:
+    def __init__(self, t):
+        self.t=t
+    def __call__(self, *arg):
+        time.sleep(self.t)
+
+class Goto:
+    def __init__(self, to):
+        self.to=to
+    def __call__(self, app, container):
+        container.goto(self.to)
 
 class CC:
     def __init__(self, cc):
