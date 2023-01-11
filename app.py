@@ -15,8 +15,8 @@ class AnimationMixin:
         return Then(self, a, after_steps)
     def interpolate(self, color1, color2, steps):
         return Then(self, Interpolate(color1, color2, steps))
-    def interpolate_to(self, color, steps):
-        return Then(self, Interpolate(self.last(), color, steps))
+    def interpolate_to(self, r,g,b, steps):
+        return Then(self, Interpolate(self.last(), (r,g,b), steps))
     def color(self, r, g, b, steps=1):
         return Then(self, Interpolate((r,g,b), (r,g,b), steps))
     def black(self, steps=1):
@@ -185,6 +185,8 @@ class Then(AnimationMixin):
             yield x
     def clone(self):
         return Then(self._first.clone(), self._then.clone(), self._steps)
+    def last(self):
+        return self._then.last()
 
 class Interpolate(AnimationMixin):
     def __init__(self, color1, color2, steps):
@@ -202,15 +204,17 @@ class Interpolate(AnimationMixin):
             r1,g1,b1=self.color1
             r2,g2,b2=self.color2
             for i in range(self.steps):
-                w = i/(self.steps-1.0)
-                r = int((1-w)*r1 + w*r2)
-                g = int((1-w)*g1 + w*g2)
-                b = int((1-w)*b1 + w*b2)
+                w = float(i)/(self.steps-1.0)
+                r = int((1.0-w)*r1 + w*r2)
+                g = int((1.0-w)*g1 + w*g2)
+                b = int((1.0-w)*b1 + w*b2)
                 yield (r,g,b)
     def clone(self):
         return Interpolate(self.color1, self.color2, self.steps)
-
-
+    def last(self):
+        return self.color2
+    def bounce(self):
+        return self.then(Interpolate(self.color2, self.color1, self.steps)).loop()
 
 MAXTICKS = 0xFFFFFFF
 class AppContainer:
@@ -296,6 +300,7 @@ class App:
         pass
     def do_tick(self, container):
         pass
+
 class Key:
     def __init__(self, n, action=None, *animation):
         self.color_animation=Animation(*animation)
@@ -401,45 +406,6 @@ class Move:
     def __call__(self, app, container):
         container.macropad.mouse.move(self.x, self.y)
 
-class Pause:
-    def __init__(self, t):
-        self.t=t
-    def __call__(self, *arg):
-        time.sleep(self.t)
-
-class Goto:
-    def __init__(self, to):
-        self.to=to
-    def __call__(self, app, container):
-        container.goto(self.to)
-
-class CC:
-    def __init__(self, cc):
-        self.cc=cc
-    def __call__(self, app, container):
-        container.macropad.consumer_control.send(self.cc)
-
-BRIGHTNESS_DECREMENT = CC(ConsumerControlCode.BRIGHTNESS_DECREMENT)
-BRIGHTNESS_INCREMENT = CC(ConsumerControlCode.BRIGHTNESS_INCREMENT)
-EJECT = CC(ConsumerControlCode.EJECT)
-FAST_FORWARD = CC(ConsumerControlCode.FAST_FORWARD)
-MUTE = CC(ConsumerControlCode.MUTE)
-PLAY_PAUSE = CC(ConsumerControlCode.PLAY_PAUSE)
-RECORD = CC(ConsumerControlCode.RECORD)
-REWIND = CC(ConsumerControlCode.REWIND)
-SCAN_NEXT_TRACK = CC(ConsumerControlCode.SCAN_NEXT_TRACK)
-SCAN_PREVIOUS_TRACK = CC(ConsumerControlCode.SCAN_PREVIOUS_TRACK)
-STOP = CC(ConsumerControlCode.STOP)
-VOLUME_DECREMENT = CC(ConsumerControlCode.VOLUME_DECREMENT)
-VOLUME_INCREMENT = CC(ConsumerControlCode.VOLUME_INCREMENT)
-
-class Move:
-    def __init__(self, x, y):
-        self.x=x
-        self.y=y
-    def __call__(self, app, container):
-        container.macropad.mouse.move(self.x, self.y)
-
 class Screen(App):
     def __init__(self, name, keys):
         self.name = name
@@ -464,7 +430,9 @@ class Screen(App):
         pixels = container.macropad.pixels
         key_event = container.key_event
         for key in self.keys:
-            pixels[key.n]=key.tick_color(t)
+            c=key.tick_color(t)
+            pixels[key.n]=c
+
         if key_event and key_event.pressed:
             for key in self.keys:
                 if key_event.key_number == key.n:
@@ -579,4 +547,12 @@ class Colors(App):
         text[0].text=self.mode
         text[1].text=str(self.color)
 
-
+def rainbow_animation(steps=20, intensity=20):
+    return (
+        Interpolate((intensity,0,0),(intensity, intensity,0),steps)
+        .interpolate_to(0,intensity,0, steps)
+        .interpolate_to(0,intensity, intensity,steps)
+        .interpolate_to(0,0,intensity,steps)
+        .interpolate_to(intensity,0,intensity,steps)
+        .interpolate_to(intensity,0,0,steps)
+    ).loop()
